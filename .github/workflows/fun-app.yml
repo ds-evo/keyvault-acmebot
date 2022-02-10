@@ -1,0 +1,53 @@
+# Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build and deploy dotnet core app to Azure Function App - evo-ssl-we
+
+on:
+  push:
+    # branches:
+    #   - evo
+    tags: [ v*-evo ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: 3.1.x # set this to the dotnet version to use
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout GitHub Action'
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Use .NET Core ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup Version
+        id: setup_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\/v/}
+
+      - name: 'Resolve Project Dependencies Using Dotnet'
+        shell: pwsh
+        run: |
+          dotnet build -c Release
+
+      - name: Publish Functions
+        run: dotnet publish -c Release -r win-x86 --self-contained false -o ./dist -p:Version=${{ steps.setup_version.outputs.VERSION }} KeyVault.Acmebot
+
+      - name: Zip Functions
+        run: 7z a -mx=9 latest.zip ./dist/*
+
+      - name: 'Run Azure Functions Action'
+        uses: Azure/functions-action@v1
+        id: fa
+        with:
+          app-name: ${{ secrets.APP_NAME }}
+          slot-name: 'Production'
+          package: 'latest.zip'
+          publish-profile: ${{ secrets.PUB_PROF }}
+
